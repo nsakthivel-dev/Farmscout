@@ -17,14 +17,79 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, Star, Sprout } from "lucide-react";
 
 interface CalendarEvent {
   id: string;
   title: string;
   date: Date;
   description?: string;
+  type?: "user" | "festival" | "crop";
 }
+
+// Agriculture and festival data
+const agricultureData = [
+  {
+    month: "January",
+    festivals: "Pongal, Thai Pongal, Mattu Pongal, Thiruvalluvar Day",
+    cropRecommendations: "Samba harvest, groundnut sowing, sunflower planting, rice nursery preparation"
+  },
+  {
+    month: "February",
+    festivals: "Maha Shivaratri",
+    cropRecommendations: "Sesame sowing, millet sowing, sugarcane irrigation, land prep for Kuruvai"
+  },
+  {
+    month: "March",
+    festivals: "Panguni Uthiram",
+    cropRecommendations: "Summer vegetable sowing, lady's finger, brinjal, tomato, rice nursery (early kuruvai)"
+  },
+  {
+    month: "April",
+    festivals: "Tamil New Year, Chitra Pournami",
+    cropRecommendations: "Short-term vegetable sowing, green gram, black gram, land preparation for Kuruvai paddy"
+  },
+  {
+    month: "May",
+    festivals: "Vaikasi Visakam",
+    cropRecommendations: "Cotton sowing, maize cultivation, Kuruvai preparation, drip irrigation crops"
+  },
+  {
+    month: "June",
+    festivals: "—",
+    cropRecommendations: "Kuruvai planting, turmeric, banana, sugarcane, rainwater harvesting work"
+  },
+  {
+    month: "July",
+    festivals: "Aadi Amavasai, Aadi Perukku",
+    cropRecommendations: "Kuruvai crop management, sorghum, pearl millet, fertilizer for banana"
+  },
+  {
+    month: "August",
+    festivals: "Krishna Jayanthi, Avani Avittam, Vinayagar Chaturthi",
+    cropRecommendations: "Samba nursery, fodder crops, maize fertilizer application"
+  },
+  {
+    month: "September",
+    festivals: "Navratri beginning",
+    cropRecommendations: "Samba paddy planting, mustard, sesame sowing, rice pest control"
+  },
+  {
+    month: "October",
+    festivals: "Ayudha Pooja, Vijayadashami",
+    cropRecommendations: "Samba irrigation, Rabi season preparation, planting chillies, onion, carrot"
+  },
+  {
+    month: "November",
+    festivals: "Deepavali, Karthigai Deepam",
+    cropRecommendations: "Groundnut sowing, green gram, Kuruvai harvest, winter vegetable planting"
+  },
+  {
+    month: "December",
+    festivals: "Margazhi festivals, Vaikunta Ekadashi",
+    cropRecommendations: "Rabi crops like wheat, maize, chickpea; frost/pest control"
+  }
+];
 
 interface EventCalendarProps {
   onPrevMonth?: () => void;
@@ -76,7 +141,8 @@ export function EventCalendar({ onPrevMonth, onNextMonth, currentDate: externalC
         id: Math.random().toString(36).substr(2, 9),
         title: newEvent.title,
         date: selectedDate,
-        description: newEvent.description
+        description: newEvent.description,
+        type: "user"
       };
       setEvents([...events, event]);
       setNewEvent({ title: "", description: "" });
@@ -138,6 +204,12 @@ export function EventCalendar({ onPrevMonth, onNextMonth, currentDate: externalC
         
         // Check if this day is today
         const isToday = isSameDay(day, today);
+        
+        // Check for festivals and crop recommendations
+        const monthName = format(day, "MMMM");
+        const monthData = agricultureData.find(data => data.month === monthName);
+        const hasFestival = monthData && monthData.festivals && monthData.festivals !== "—";
+        const hasCropRecommendation = monthData && monthData.cropRecommendations;
 
         days.push(
           <div
@@ -155,6 +227,21 @@ export function EventCalendar({ onPrevMonth, onNextMonth, currentDate: externalC
             {isToday && (
               <div className="absolute top-1 right-1 w-2 h-2 bg-primary rounded-full"></div>
             )}
+            
+            {/* Festival indicator */}
+            {hasFestival && (
+              <div className="absolute top-1 left-1">
+                <Star className="h-3 w-3 text-yellow-500 fill-yellow-500" />
+              </div>
+            )}
+            
+            {/* Crop recommendation indicator */}
+            {hasCropRecommendation && (
+              <div className="absolute bottom-1 left-1">
+                <Sprout className="h-3 w-3 text-green-500" />
+              </div>
+            )}
+            
             <span className={`text-sm font-medium ${isToday ? "text-primary font-bold" : ""}`}>
               {formattedDate}
             </span>
@@ -162,7 +249,13 @@ export function EventCalendar({ onPrevMonth, onNextMonth, currentDate: externalC
               {dayEvents.map(event => (
                 <div 
                   key={event.id} 
-                  className="text-xs bg-primary text-primary-foreground p-1 rounded truncate"
+                  className={`text-xs p-1 rounded truncate ${
+                    event.type === "festival" 
+                      ? "bg-yellow-100 text-yellow-800 border border-yellow-200" 
+                      : event.type === "crop" 
+                        ? "bg-green-100 text-green-800 border border-green-200"
+                        : "bg-primary text-primary-foreground"
+                  }`}
                 >
                   {event.title}
                 </div>
@@ -196,6 +289,26 @@ export function EventCalendar({ onPrevMonth, onNextMonth, currentDate: externalC
           <div className="calendar">
             {renderDays()}
             {renderCells()}
+          </div>
+          
+          {/* Legend */}
+          <div className="flex flex-wrap gap-4 mt-4 pt-4 border-t">
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 bg-primary rounded-full"></div>
+              <span className="text-sm">Today</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
+              <span className="text-sm">Festivals</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Sprout className="h-4 w-4 text-green-500" />
+              <span className="text-sm">Crop Recommendations</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 bg-primary rounded"></div>
+              <span className="text-sm">User Events</span>
+            </div>
           </div>
         </CardContent>
       </Card>
