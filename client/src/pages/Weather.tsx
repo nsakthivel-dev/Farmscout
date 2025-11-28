@@ -108,7 +108,7 @@ export default function Weather() {
             className="flex items-center gap-2"
           >
             <ChevronLeft className="h-5 w-5" />
-            Previous
+            {activeSection === "weather" ? "Calendar" : "Weather"}
           </Button>
           
           <div className="text-xl font-semibold">
@@ -121,7 +121,7 @@ export default function Weather() {
             onClick={goToNextSection}
             className="flex items-center gap-2"
           >
-            Next
+            {activeSection === "weather" ? "Calendar" : "Weather"}
             <ChevronRight className="h-5 w-5" />
           </Button>
         </div>
