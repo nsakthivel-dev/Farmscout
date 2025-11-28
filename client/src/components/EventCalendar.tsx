@@ -121,6 +121,9 @@ export function EventCalendar({ onPrevMonth, onNextMonth, currentDate: externalC
     const monthEnd = endOfMonth(monthStart);
     const startDate = startOfWeek(monthStart);
     const endDate = endOfWeek(monthEnd);
+    
+    // Get today's date for comparison
+    const today = new Date();
 
     const rows = [];
     let days = [];
@@ -132,18 +135,29 @@ export function EventCalendar({ onPrevMonth, onNextMonth, currentDate: externalC
         formattedDate = format(day, "d");
         const cloneDay = day;
         const dayEvents = events.filter(event => isSameDay(event.date, cloneDay));
+        
+        // Check if this day is today
+        const isToday = isSameDay(day, today);
 
         days.push(
           <div
-            className={`min-h-24 p-2 border rounded-lg cursor-pointer transition-colors ${
+            className={`min-h-24 p-2 border rounded-lg cursor-pointer transition-colors relative ${
               !isSameMonth(day, monthStart)
                 ? "bg-muted/50 text-muted-foreground"
                 : "bg-background hover:bg-accent"
+            } ${
+              isToday ? "border-2 border-primary" : ""
             }`}
             key={day.toString()}
             onClick={() => handleDateClick(cloneDay)}
           >
-            <span className="text-sm font-medium">{formattedDate}</span>
+            {/* Today indicator */}
+            {isToday && (
+              <div className="absolute top-1 right-1 w-2 h-2 bg-primary rounded-full"></div>
+            )}
+            <span className={`text-sm font-medium ${isToday ? "text-primary font-bold" : ""}`}>
+              {formattedDate}
+            </span>
             <div className="mt-1 space-y-1">
               {dayEvents.map(event => (
                 <div 
