@@ -11,6 +11,7 @@
     "db:push": "drizzle-kit push"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "@hookform/resolvers": "^3.10.0",
     "@jridgewell/trace-mapping": "^0.3.25",
     "@neondatabase/serverless": "^0.10.4",
@@ -99,6 +100,7 @@
     "@types/pdf-parse": "^1.1.5",
     "@types/react": "^18.3.11",
     "@types/react-dom": "^18.3.1",
+    "@types/uuid": "^11.0.0",
     "@types/ws": "^8.5.13",
     "@vitejs/plugin-react": "^4.7.0",
     "autoprefixer": "^10.4.20",

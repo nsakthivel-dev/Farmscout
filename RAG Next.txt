@@ -1,0 +1,509 @@
+# RAG Next.js Chatbot — Full Project (Production-ready starter)
+
+> This canvas contains a complete implementation scaffold for a Retrieval-Augmented Generation (RAG) chatbot using **Next.js (app router)**, **React** UI, **OpenAI embeddings & chat**, and support for both **Pinecone** (production) and **Chroma** (local dev). The app supports multi-document ingestion and returns source-cited answers.
+
+---
+
+## Project files included below (copy each into your project):
+
+1. `package.json`
+2. `next.config.js`
+3. `tailwind.config.js` + `postcss.config.js` (minimal)
+4. `app/layout.jsx`, `app/page.jsx`
+5. `/app/components/ChatWindow.jsx`, `Message.jsx`, `UploadDocs.jsx`, `SearchBar.jsx`
+6. `/pages/api/ingest.js`, `/pages/api/qa.js`, `/pages/api/health.js`
+7. `/lib/embeddings.js`, `/lib/vectorstore.js`, `/lib/retriever.js`
+8. `/scripts/ingest-local.js` and `/scripts/chunker.js`
+9. `/utils/textExtractors.js`, `/utils/helpers.js`
+10. `README.md` (short)
+
+---
+
+> **Important:** Do **NOT** expose `OPENAI_API_KEY` or `PINECONE_API_KEY` to the browser. Keep them in server `.env.local`.
+
+---
+
+### 1) package.json
+
+```json
+{
+  "name": "rag-nextjs-chatbot",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "ingest-local": "node ./scripts/ingest-local.js"
+  },
+  "dependencies": {
+    "next": "14.3.0",
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
+    "tailwindcss": "3.4.0",
+    "formidable": "3.6.4",
+    "pdf-parse": "1.1.1",
+    "openai": "4.6.0",
+    "@pinecone-database/pinecone": "4.0.0",
+    "chroma-db": "0.0.1-PLACEHOLDER",
+    "uuid": "9.0.0",
+    "buffer": "6.0.3",
+    "axios": "1.4.0"
+  }
+}
+```
+
+> Note: Replace chroma package with your preferred local vectorstore (e.g., `chromadb` npm or FAISS wrapper). The example uses Pinecone primarily.
+
+---
+
+### 2) next.config.js
+
+```js
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  reactStrictMode: true,
+  experimental: {
+    appDir: true,
+  },
+}
+module.exports = nextConfig
+```
+
+---
+
+### 3) Tailwind minimal configs (postcss.config.js + tailwind.config.js)
+
+`postcss.config.js`
+```js
+module.exports = {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {},
+  },
+}
+```
+
+`tailwind.config.js`
+```js
+module.exports = {
+  content: ['./app/**/*.{js,jsx}', './components/**/*.{js,jsx}', './pages/**/*.{js,jsx}'],
+  theme: { extend: {} },
+  plugins: [],
+}
+```
+
+---
+
+### 4) app/layout.jsx
+
+```jsx
+import './globals.css'
+export const metadata = { title: 'RAG Chatbot', description: 'RAG chatbot with Next.js' }
+export default function RootLayout({ children }) {
+  return (
+    <html lang="en">
+      <body className="bg-gray-50">
+        <main className="max-w-5xl mx-auto p-6">{children}</main>
+      </body>
+    </html>
+  )
+}
+```
+
+---
+
+### 5) app/page.jsx (main UI)
+
+```jsx
+import ChatWindow from './components/ChatWindow'
+import UploadDocs from './components/UploadDocs'
+
+export default function Page() {
+  return (
+    <div className="grid grid-cols-12 gap-6">
+      <aside className="col-span-3 bg-white p-4 rounded shadow"> 
+        <h2 className="font-semibold mb-3">Documents</h2>
+        <UploadDocs />
+      </aside>
+      <section className="col-span-9">
+        <ChatWindow />
+      </section>
+    </div>
+  )
+}
+```
+
+---
+
+### 6) components/UploadDocs.jsx
+
+```jsx
+'use client'
+import { useState } from 'react'
+
+export default function UploadDocs() {
+  const [files, setFiles] = useState(null)
+  const [status, setStatus] = useState('')
+
+  async function upload(e) {
+    e.preventDefault()
+    const form = new FormData()
+    for (const f of files) form.append('files', f)
+    setStatus('Uploading...')
+    const res = await fetch('/api/ingest', { method: 'POST', body: form })
+    const j = await res.json()
+    setStatus(j.ok ? 'Ingested' : 'Error: ' + (j.error || res.status))
+  }
+
+  return (
+    <form onSubmit={upload} className="space-y-3">
+      <input type="file" multiple onChange={(e) => setFiles(e.target.files)} />
+      <button className="px-3 py-1 bg-blue-600 text-white rounded" type="submit">Upload & Ingest</button>
+      <div className="text-sm text-gray-600">{status}</div>
+    </form>
+  )
+}
+```
+
+---
+
+### 7) components/ChatWindow.jsx
+
+```jsx
+'use client'
+import { useState } from 'react'
+import Message from './Message'
+
+export default function ChatWindow() {
+  const [messages, setMessages] = useState([])
+  const [q, setQ] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  async function ask(e) {
+    e.preventDefault()
+    if (!q) return
+    const question = q
+    setMessages((m) => [...m, { id: Date.now(), role: 'user', text: question }])
+    setQ('')
+    setLoading(true)
+    try {
+      const res = await fetch('/api/qa', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ query: question, topK: 5 }) })
+      const j = await res.json()
+      setMessages((m) => [...m, { id: Date.now()+1, role: 'bot', text: j.answer, sources: j.sources }])
+    } catch (err) {
+      setMessages((m) => [...m, { id: Date.now()+1, role: 'bot', text: 'Error: ' + String(err) }])
+    } finally { setLoading(false) }
+  }
+
+  return (
+    <div className="bg-white p-4 rounded shadow h-[70vh] flex flex-col">
+      <div className="overflow-auto mb-4 flex-1 space-y-3 p-2">
+        {messages.map(m => <Message key={m.id} msg={m} />)}
+      </div>
+      <form onSubmit={ask} className="flex gap-2">
+        <input value={q} onChange={(e)=>setQ(e.target.value)} className="flex-1 border p-2 rounded" placeholder="Ask anything from uploaded docs..." />
+        <button className="px-3 py-2 bg-blue-600 text-white rounded" disabled={loading}>{loading ? 'Thinking...' : 'Ask'}</button>
+      </form>
+    </div>
+  )
+}
+```
+
+---
+
+### 8) components/Message.jsx
+
+```jsx
+export default function Message({ msg }) {
+  return (
+    <div className={msg.role === 'user' ? 'text-right' : 'text-left'}>
+      <div className={`inline-block p-3 rounded ${msg.role==='user' ? 'bg-blue-100' : 'bg-gray-100'}`}>
+        <div className="whitespace-pre-wrap">{msg.text}</div>
+        {msg.sources && (
+          <div className="mt-2 text-xs text-gray-600">Sources: {msg.sources.map(s => `${s.id}${s.page?`:${s.page}`:''}`).join(', ')}</div>
+        )}
+      </div>
+    </div>
+  )
+}
+```
+
+---
+
+### 9) pages/api/health.js
+
+```js
+export default function handler(req, res) { res.json({ ok: true }) }
+```
+
+---
+
+### 10) pages/api/ingest.js — ingest uploaded files, chunk, embed, upsert
+
+```js
+import formidable from 'formidable'
+import fs from 'fs'
+import { extractTextFromFile } from '../../utils/textExtractors'
+import { chunkText } from '../../scripts/chunker'
+import { getEmbeddings } from '../../lib/embeddings'
+import { upsertVectors } from '../../lib/vectorstore'
+import { v4 as uuidv4 } from 'uuid'
+
+export const config = { api: { bodyParser: false } }
+
+export default async function handler(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
+  const form = new formidable.IncomingForm()
+  form.parse(req, async (err, fields, files) => {
+    if (err) return res.status(500).json({ error: err.message })
+    try {
+      const fileList = Array.isArray(files.files) ? files.files : [files.files]
+      const allChunks = []
+      for (const f of fileList) {
+        const id = uuidv4()
+        const buffer = fs.readFileSync(f.filepath)
+        const { text, pages } = await extractTextFromFile(buffer, f.originalFilename)
+        const chunks = chunkText(text, { chunkSize: 800, chunkOverlap: 120 })
+        // attach metadata
+        const chunksWithMeta = chunks.map((c, i) => ({ id: `${id}_${i}`, text: c, metadata: { source: f.originalFilename, page: null } }))
+        allChunks.push(...chunksWithMeta)
+      }
+      // create embeddings in batches
+      const texts = allChunks.map(c => c.text)
+      const embeddings = await getEmbeddings(texts)
+      const items = allChunks.map((c, i) => ({ id: c.id, values: embeddings[i], metadata: c.metadata, text: c.text }))
+      await upsertVectors(items)
+      res.json({ ok: true, inserted: items.length })
+    } catch (e) {
+      console.error(e)
+      res.status(500).json({ error: e.message })
+    }
+  })
+}
+```
+
+> Note: formidable temporary files are read synchronously; for production, stream and delete temp files carefully.
+
+---
+
+### 11) pages/api/qa.js — main QA endpoint
+
+```js
+import { getEmbeddings } from '../../lib/embeddings'
+import { queryVectors } from '../../lib/vectorstore'
+import { generateAnswer } from '../../lib/retriever'
+
+export default async function handler(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
+  const { query, topK = 5 } = req.body
+  if (!query) return res.status(400).json({ error: 'Missing query' })
+  try {
+    const qEmb = await getEmbeddings([query])
+    const nearest = await queryVectors(qEmb[0], topK)
+    // nearest: [{ id, score, metadata, text }]
+    const answerObj = await generateAnswer(query, nearest)
+    res.json(answerObj)
+  } catch (e) {
+    console.error(e)
+    res.status(500).json({ error: e.message })
+  }
+}
+```
+
+---
+
+### 12) lib/embeddings.js — OpenAI embeddings wrapper
+
+```js
+import OpenAI from 'openai'
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+
+export async function getEmbeddings(texts) {
+  // texts: array of strings
+  // returns array of numeric arrays
+  const res = await openai.embeddings.create({ model: 'text-embedding-3-small', input: texts })
+  return res.data.map(x => x.embedding)
+}
+```
+
+---
+
+### 13) lib/vectorstore.js — Pinecone + fallback (simple)
+
+```js
+import { PineconeClient } from '@pinecone-database/pinecone'
+
+const PINE = new PineconeClient()
+let pineIndex
+
+async function initPinecone() {
+  if (!pineIndex) {
+    await PINE.init({ apiKey: process.env.PINECONE_API_KEY, environment: process.env.PINECONE_ENVIRONMENT })
+    pineIndex = PINE.Index(process.env.PINECONE_INDEX)
+  }
+}
+
+export async function upsertVectors(items) {
+  // items: [{ id, values, metadata, text }]
+  await initPinecone()
+  const toUpsert = items.map(it => ({ id: it.id, values: it.values, metadata: { ...it.metadata, text: it.text } }))
+  // Pinecone upsert in batches
+  const BATCH = 100
+  for (let i=0;i<toUpsert.length;i+=BATCH) {
+    const slice = toUpsert.slice(i, i+BATCH)
+    await pineIndex.upsert({ upsertRequest: { vectors: slice } })
+  }
+}
+
+export async function queryVectors(embedding, topK=5) {
+  await initPinecone()
+  const q = await pineIndex.query({ queryRequest: { topK, includeMetadata: true, vector: embedding } })
+  return q.matches.map(m => ({ id: m.id, score: m.score, metadata: m.metadata, text: m.metadata?.text }))
+}
+```
+
+> If you cannot use Pinecone, swap these functions for your local Chroma/FAISS wrappers.
+
+---
+
+### 14) lib/retriever.js — stitch context + call LLM for answer
+
+```js
+import OpenAI from 'openai'
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+
+function buildPrompt(question, docs) {
+  // docs: [{id, score, metadata, text}]
+  const context = docs.map((d, i) => `Source ${i+1} (${d.metadata?.source || d.id}):
+${d.text.slice(0,1000)}`).join('
+
+')
+  return `You are an assistant with access to the following documents. Use only the provided documents to answer. If the answer is not contained, say "I don't know". Cite sources inline using [Source X].
+
+CONTEXT:
+${context}
+
+QUESTION: ${question}
+
+Answer concisely and include a brief list of sources at the end.`
+}
+
+export async function generateAnswer(question, nearest) {
+  const prompt = buildPrompt(question, nearest)
+  const completion = await openai.chat.completions.create({ model: 'gpt-4o-mini', messages: [{ role: 'system', content: 'You are a helpful assistant.' }, { role: 'user', content: prompt }], max_tokens: 800 })
+  const answer = completion.choices[0].message.content
+  const sources = nearest.map((n, i) => ({ id: n.metadata?.source || n.id, score: n.score }))
+  return { answer, sources, raw: completion }
+}
+```
+
+> Adjust model names per your OpenAI access. Use streaming for better UX.
+
+---
+
+### 15) scripts/chunker.js — simple text splitter
+
+```js
+export function chunkText(text, { chunkSize = 800, chunkOverlap = 120 } = {}) {
+  const out = []
+  let start = 0
+  while (start < text.length) {
+    const end = Math.min(start + chunkSize, text.length)
+    out.push(text.slice(start, end))
+    start = end - chunkOverlap
+    if (start < 0) start = 0
+  }
+  return out
+}
+```
+
+---
+
+### 16) scripts/ingest-local.js — CLI ingestion for local docs
+
+```js
+#!/usr/bin/env node
+import fs from 'fs'
+import path from 'path'
+import { chunkText } from './chunker.js'
+import { getEmbeddings } from '../lib/embeddings.js'
+import { upsertVectors } from '../lib/vectorstore.js'
+
+const DIR = process.argv[2] || './docs'
+async function run() {
+  const files = fs.readdirSync(DIR)
+  for (const f of files) {
+    const p = path.join(DIR, f)
+    const text = fs.readFileSync(p, 'utf8')
+    const chunks = chunkText(text)
+    const embeddings = await getEmbeddings(chunks)
+    const items = chunks.map((c, i) => ({ id: `${f}_${i}`, values: embeddings[i], metadata: { source: f }, text: c }))
+    await upsertVectors(items)
+    console.log('Ingested', f, items.length)
+  }
+}
+run().catch(e => { console.error(e); process.exit(1) })
+```
+
+---
+
+### 17) utils/textExtractors.js — PDF & TXT extraction (minimal)
+
+```js
+import pdfparse from 'pdf-parse'
+
+export async function extractTextFromFile(buffer, filename) {
+  if (filename.endsWith('.pdf')) {
+    const data = await pdfparse(buffer)
+    return { text: data.text, pages: null }
+  }
+  // fallback: treat as UTF-8 text
+  return { text: buffer.toString('utf8'), pages: null }
+}
+```
+
+---
+
+### 18) utils/helpers.js
+
+```js
+export function safeFilename(name) { return name.replace(/[^a-z0-9.\-_]/gi,'_') }
+```
+
+---
+
+## .env.local (example — create in project root)
+
+```
+OPENAI_API_KEY=sk-...
+PINECONE_API_KEY=...
+PINECONE_ENVIRONMENT=us-west1-gcp
+PINECONE_INDEX=rag-index
+```
+
+---
+
+## How to run locally
+1. Create `.env.local` with keys above.
+2. `pnpm install`
+3. `pnpm run dev`
+4. Open `http://localhost:3000` — upload docs and ask questions.
+
+---
+
+## Next improvements you should add
+- Re-ranker (cross-encoder) for improved result ordering.
+- Document-level metadata: page numbers and anchors to jump to the right spot in the file.
+- Authentication (NextAuth) and per-user vector namespaces.
+- Streaming answers via SSE / WebSockets for partial tokens.
+- Background worker for ingestion (BullMQ / RabbitMQ) to avoid serverless timeouts.
+
+---
+
+If you want, I can now:
+- Export the entire project as a zip file for download, or
+- Replace Pinecone with Qdrant/Chroma code, or
+- Add authentication and per-user isolation.
+
+Tell me which and I'll update the canvas accordingly.

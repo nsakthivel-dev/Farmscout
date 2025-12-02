@@ -39,7 +39,7 @@ export function Navbar() {
     { href: "/", label: t("nav.home") },
     { href: "/diagnose", label: t("nav.diagnose") },
     { href: "/library", label: t("nav.library") },
-    { href: "/chat", label: t("nav.chat") },
+    { href: "/chat", label: "AI Assistant" },
     { href: "/dashboard", label: t("nav.dashboard") },
     { href: "/experts", label: t("nav.experts") },
     { href: "/alerts", label: t("nav.weather") },

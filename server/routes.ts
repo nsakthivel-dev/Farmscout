@@ -316,6 +316,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // RAG API endpoints
+  app.post("/api/rag/ingest", (req, res) => {
+    import('./pages/api/ingest.ts').then(module => {
+      module.default(req, res);
+    }).catch(error => {
+      console.error('Error loading ingest module:', error);
+      res.status(500).json({ error: 'Failed to load ingest module' });
+    });
+  });
+
+  app.post("/api/rag/qa", (req, res) => {
+    import('./pages/api/qa.ts').then(module => {
+      module.default(req, res);
+    }).catch(error => {
+      console.error('Error loading qa module:', error);
+      res.status(500).json({ error: 'Failed to load qa module' });
+    });
+  });
+
+  app.get("/api/rag/health", (req, res) => {
+    import('./pages/api/health.ts').then(module => {
+      module.default(req, res);
+    }).catch(error => {
+      console.error('Error loading health module:', error);
+      res.status(500).json({ error: 'Failed to load health module' });
+    });
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;

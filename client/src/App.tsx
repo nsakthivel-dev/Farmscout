@@ -1,4 +1,4 @@
-import { Switch, Route } from "wouter";
+import { Switch, Route, Redirect, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -10,15 +10,21 @@ import { Footer } from "@/components/Footer";
 import Home from "@/pages/Home";
 import Diagnose from "@/pages/Diagnose";
 import Library from "@/pages/Library";
-import Chat from "@/pages/Chat";
+import RagAssistant from "@/pages/RagAssistant";
 import Dashboard from "@/pages/Dashboard";
 import Experts from "@/pages/Experts";
 import Weather from "@/pages/Weather";
 import Contact from "@/pages/Contact";
-import Admin from "@/pages/Admin";
 import DataStorage from "@/pages/DataStorage";
 import FarmConnect from "@/pages/FarmConnect";
 import NotFound from "@/pages/not-found";
+import AdminDashboard from "@/pages/AdminDashboard";
+import DataStorageManager from "@/components/admin/DataStorageManager";
+import ContentManager from "@/components/admin/ContentManager";
+import UserManagement from "@/components/admin/UserManagement";
+import DocumentManager from "@/components/admin/DocumentManager";
+import AdminSidebar from "@/components/admin/AdminSidebar";
+import AdminHeader from "@/components/admin/AdminHeader";
 
 function Router() {
   return (
@@ -26,12 +32,11 @@ function Router() {
       <Route path="/" component={Home} />
       <Route path="/diagnose" component={Diagnose} />
       <Route path="/library" component={Library} />
-      <Route path="/chat" component={Chat} />
+      <Route path="/chat" component={RagAssistant} />
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/experts" component={Experts} />
       <Route path="/alerts" component={Weather} />
       <Route path="/contact" component={Contact} />
-      <Route path="/admin" component={Admin} />
       <Route path="/data-storage" component={DataStorage} />
       <Route path="/farm-connect" component={FarmConnect} />
       <Route component={NotFound} />
@@ -39,19 +44,55 @@ function Router() {
   );
 }
 
+function AdminRouter() {
+  return (
+    <Switch>
+      <Route path="/admin/dashboard" component={AdminDashboard} />
+      <Route path="/admin/data-storage" component={DataStorageManager} />
+      <Route path="/admin/content" component={ContentManager} />
+      <Route path="/admin/documents" component={DocumentManager} />
+      <Route path="/admin/users" component={UserManagement} />
+      <Route path="/admin">
+        <Redirect to="/admin/dashboard" />
+      </Route>
+    </Switch>
+  );
+}
+
 function App() {
+  const [location] = useLocation();
+  const isAdminRoute = location.startsWith("/admin");
+
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <ThemeProvider>
           <LanguageProvider>
-            <div className="min-h-screen flex flex-col">
-              <Navbar />
-              <main className="flex-1 pt-14 sm:pt-16 lg:pt-20">
-                <Router />
-              </main>
-              <Footer />
-            </div>
+            {isAdminRoute ? (
+              // Admin layout with fixed sidebar and header
+              <div className="flex min-h-screen">
+                <div className="fixed top-0 left-0 h-full w-64 z-50">
+                  <AdminSidebar />
+                </div>
+                <div className="flex-1 flex flex-col ml-64">
+                  <div className="sticky top-0 z-40">
+                    <AdminHeader />
+                  </div>
+                  <div className="flex-1 overflow-auto">
+                    <AdminRouter />
+                  </div>
+                </div>
+              </div>
+            ) : (
+              // Regular app layout
+              <div className="min-h-screen flex flex-col">
+                <Navbar />
+                <main className="flex-1 pt-14 sm:pt-16 lg:pt-20">
+                  <Router />
+                </main>
+                <Footer />
+              </div>
+            )}
             <Toaster />
           </LanguageProvider>
         </ThemeProvider>
