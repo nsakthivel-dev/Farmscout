@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Cloud, MapPin, Thermometer, Droplets, Wind, Eye, Sun, CloudRain, Calendar as CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react";
+import { Cloud, MapPin, Thermometer, Droplets, Wind, Eye, Sun, CloudRain, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Home } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { EventCalendar } from "@/components/EventCalendar";
 import { addMonths, subMonths } from "date-fns";
@@ -51,6 +51,18 @@ export default function Weather() {
   const [searchLocation, setSearchLocation] = useState("Chennai");
   const [activeSection, setActiveSection] = useState<"weather" | "calendar">("weather");
   const [calendarDate, setCalendarDate] = useState(new Date());
+  const [homeLocation, setHomeLocation] = useState<string | null>(null);
+
+  // Load home location from localStorage on component mount
+  useEffect(() => {
+    const savedHomeLocation = localStorage.getItem('homeLocation');
+    if (savedHomeLocation) {
+      setHomeLocation(savedHomeLocation);
+      setSearchLocation(savedHomeLocation);
+      setLocation(savedHomeLocation);
+      refetch();
+    }
+  }, []);
 
   const { data: weather, isLoading, error, refetch } = useQuery<WeatherData>({
     queryKey: ["weather", location],
@@ -67,6 +79,11 @@ export default function Weather() {
   const handleSearch = () => {
     setLocation(searchLocation);
     refetch();
+  };
+
+  const handleSetHomeAsHome = () => {
+    localStorage.setItem('homeLocation', location);
+    setHomeLocation(location);
   };
 
   const formatDate = (dateString: string) => {
@@ -141,6 +158,14 @@ export default function Weather() {
                     onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
                   />
                   <Button onClick={handleSearch}>{t("weather.search_button")}</Button>
+                  <Button 
+                    onClick={handleSetHomeAsHome}
+                    variant={homeLocation === location ? "default" : "outline"}
+                    className="flex items-center gap-2"
+                  >
+                    <Home className="h-4 w-4" />
+                    Set as Home
+                  </Button>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <span className="text-sm text-muted-foreground">Quick search:</span>
@@ -190,6 +215,9 @@ export default function Weather() {
                     <CardTitle className="flex items-center gap-2">
                       <MapPin className="h-5 w-5" />
                       {weather.location.name}, {weather.location.country}
+                      {homeLocation === weather.location.name && (
+                        <Home className="h-4 w-4 text-primary" />
+                      )}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>

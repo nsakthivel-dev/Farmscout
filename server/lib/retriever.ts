@@ -5,37 +5,52 @@ import { getEmbeddings } from './embeddings';
 // Initialize OpenRouter client (uses OpenAI-compatible API)
 let openrouter: OpenAI | null = null;
 
-// Validate and initialize OpenRouter
-if (process.env.OPENROUTER_API_KEY && process.env.OPENROUTER_API_KEY.length > 10) {
-  try {
-    console.log('Initializing OpenRouter client');
-    openrouter = new OpenAI({
-      apiKey: process.env.OPENROUTER_API_KEY,
-      baseURL: 'https://openrouter.ai/api/v1',
-      defaultHeaders: {
-        'HTTP-Referer': 'http://localhost:3000', // Optional, for including your app on openrouter.ai rankings
-        'X-Title': 'Crop Disease Pest Management System' // Optional, shows in rankings
-      }
-    });
-    console.log('✅ OpenRouter client initialized successfully');
-  } catch (error: any) {
-    console.error('❌ Failed to initialize OpenRouter:', error.message);
+// Initialize Gemini client
+let googleAI: GoogleGenerativeAI | null = null;
+
+// Function to initialize OpenRouter when needed
+function initializeOpenRouter() {
+  if (openrouter) return openrouter;
+  
+  if (process.env.OPENROUTER_API_KEY && process.env.OPENROUTER_API_KEY.length > 10) {
+    try {
+      console.log('Initializing OpenRouter client');
+      openrouter = new OpenAI({
+        apiKey: process.env.OPENROUTER_API_KEY,
+        baseURL: 'https://openrouter.ai/api/v1',
+        defaultHeaders: {
+          'HTTP-Referer': 'http://localhost:3000', // Optional, for including your app on openrouter.ai rankings
+          'X-Title': 'Crop Disease Pest Management System' // Optional, shows in rankings
+        }
+      });
+      console.log('✅ OpenRouter client initialized successfully');
+    } catch (error: any) {
+      console.error('❌ Failed to initialize OpenRouter:', error.message);
+    }
+  } else {
+    console.log('⚠️ OpenRouter API key not configured or invalid');
   }
-} else {
-  console.log('⚠️ OpenRouter API key not configured or invalid');
+  
+  return openrouter;
 }
 
-let googleAI: GoogleGenerativeAI | null = null;
-if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'YOUR_GEMINI_API_KEY_HERE' && process.env.GEMINI_API_KEY.length > 10) {
-  try {
-    console.log('Initializing Gemini AI client');
-    googleAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    console.log('✅ Gemini AI client initialized successfully');
-  } catch (error: any) {
-    console.error('❌ Failed to initialize Gemini AI:', error.message);
+// Function to initialize Google AI when needed
+function initializeGoogleAI() {
+  if (googleAI) return googleAI;
+  
+  if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'YOUR_GEMINI_API_KEY_HERE' && process.env.GEMINI_API_KEY.length > 10) {
+    try {
+      console.log('Initializing Gemini AI client');
+      googleAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+      console.log('✅ Gemini AI client initialized successfully');
+    } catch (error: any) {
+      console.error('❌ Failed to initialize Gemini AI:', error.message);
+    }
+  } else {
+    console.log('⚠️ Gemini API key not configured or using placeholder');
   }
-} else {
-  console.log('⚠️ Gemini API key not configured or using placeholder');
+  
+  return googleAI;
 }
 
 function buildPrompt(question: string, docs: Array<{id: string; score: number; metadata: Record<string, any>; text: string}>): string {
@@ -70,27 +85,31 @@ export async function generateAnswer(question: string, nearest: Array<{id: strin
   
   try {
     // Filter out low-relevance documents
-    const relevantDocs = nearest.filter(doc => doc.score > 0.5);
+    const relevantDocs = nearest.filter(doc => doc.score > 0.3); // Lowered threshold for better matching
     console.log(`Found ${relevantDocs.length} relevant documents`);
     
     const prompt = buildPrompt(question, relevantDocs);
     console.log('Prompt built successfully');
     
+    // Initialize clients when needed
+    const openrouterClient = initializeOpenRouter();
+    const googleAIClient = initializeGoogleAI();
+    
     // Try OpenRouter first (using Qwen3 Coder model)
-    if (openrouter) {
+    if (openrouterClient) {
       let timeoutId: NodeJS.Timeout | null = null; // Declare timeoutId in outer scope
       try {
         console.log('Attempting OpenRouter with Qwen3 Coder model...');
         const controller = new AbortController();
-        timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+        timeoutId = setTimeout(() => controller.abort(), 20000); // Reduced to 20 second timeout
         
-        const completion = await openrouter.chat.completions.create({ 
+        const completion = await openrouterClient.chat.completions.create({ 
           model: 'qwen/qwen3-coder:free', // Using the free Qwen3 Coder model from OpenRouter
           messages: [
             { role: 'system', content: 'You are a helpful agricultural assistant with strong coding and technical capabilities. Provide concise, accurate answers.' }, 
             { role: 'user', content: prompt }
           ], 
-          max_tokens: 1000,
+          max_tokens: 800, // Reduced token count for faster responses
           temperature: 0.7,
           top_p: 0.9
         }, { signal: controller.signal });
@@ -117,7 +136,6 @@ export async function generateAnswer(question: string, nearest: Array<{id: strin
         // Handle timeout specifically
         if (openRouterError.name === 'AbortError' || openRouterError.message?.includes('timeout')) {
           console.error('⏰ OpenRouter request timed out');
-          throw new Error('The AI model is taking too long to respond. Please try again or use a different question.');
         }
       }
     } else {
@@ -125,12 +143,12 @@ export async function generateAnswer(question: string, nearest: Array<{id: strin
     }
     
     // Try Gemini as fallback
-    if (googleAI) {
+    if (googleAIClient) {
       console.log('Attempting Gemini fallback...');
       try {
         // Try different model names that are more likely to work
         const modelNames = [
-          'models/gemini-2.5-flash',
+          'models/gemini-2.5-flash', // Fast model first
           'models/gemini-1.5-flash',
           'models/gemini-pro',
           'models/gemini-1.0-pro'
@@ -139,7 +157,7 @@ export async function generateAnswer(question: string, nearest: Array<{id: strin
         for (const modelName of modelNames) {
           try {
             console.log(`Attempting Gemini model: ${modelName}`);
-            const model = googleAI.getGenerativeModel({ model: modelName });
+            const model = googleAIClient.getGenerativeModel({ model: modelName });
             
             const result = await model.generateContent(prompt);
             const response = await result.response;
@@ -162,7 +180,7 @@ export async function generateAnswer(question: string, nearest: Array<{id: strin
         // If all models fail, try a very simple approach
         console.log('All standard models failed, trying simplified approach');
         try {
-          const model = googleAI.getGenerativeModel({ model: 'models/gemini-2.5-flash' });
+          const model = googleAIClient.getGenerativeModel({ model: 'models/gemini-2.5-flash' });
           const result = await model.generateContent(`Answer this question: ${question}`);
           const response = await result.response;
           const answer = response.text() || 'No answer generated';
@@ -181,7 +199,7 @@ export async function generateAnswer(question: string, nearest: Array<{id: strin
         let errorMessage = "I'm currently unable to access the AI service.";
         
         // Note: openRouterError is not available in this scope, so we provide a generic message
-        if (openrouter) {
+        if (openrouterClient) {
           errorMessage += " There was an issue with the OpenRouter service.";
         }
         
@@ -198,31 +216,22 @@ export async function generateAnswer(question: string, nearest: Array<{id: strin
         // Provide a basic response since both AI services are down
         const basicResponse = "I'm currently experiencing technical difficulties with the AI services. As a crop disease and pest management assistant, I'm designed to help farmers with agricultural questions. For immediate assistance, please contact your system administrator.";
         
-        return { answer: `${errorMessage}\n\n${basicResponse}`, sources: [], raw: null };
+        // Return the basic response with no sources
+        return { answer: basicResponse, sources: [], raw: null };
       }
     } else {
-      // Gemini not configured
-      let errorMessage = "I'm currently unable to access the AI service.";
-      
-      // Note: openRouterError is not available in this scope, so we provide a generic message
-      if (openrouter) {
-        errorMessage += " There was an issue with the OpenRouter service.";
-      }
-      
-      errorMessage += " Gemini service is not configured. Please contact the administrator.";
-      
-      // Provide a basic response since both AI services are down
-      const basicResponse = "I'm currently experiencing technical difficulties with the AI services. As a crop disease and pest management assistant, I'm designed to help farmers with agricultural questions. For immediate assistance, please contact your system administrator.";
-      
-      return { answer: `${errorMessage}\n\n${basicResponse}`, sources: [], raw: null };
+      console.log('Gemini not available, skipping');
     }
-  } catch (error: any) {
-    console.error('❌ Error in generateAnswer:', error.message);
     
-    // Provide a fallback response when both services are not available
-    const errorMessage = "I'm currently unable to access the AI service due to a system error. Please contact the administrator.";
+    // If we get here, both services are unavailable
+    const errorMessage = "I'm currently unable to access the AI services. Please contact the administrator to resolve the API configuration issues.";
     const basicResponse = "I'm currently experiencing technical difficulties with the AI services. As a crop disease and pest management assistant, I'm designed to help farmers with agricultural questions. For immediate assistance, please contact your system administrator.";
     
-    return { answer: `${errorMessage}\n\n${basicResponse}`, sources: [], raw: null };
+    // Return the basic response with no sources
+    return { answer: basicResponse, sources: [], raw: null };
+  } catch (error: any) {
+    console.error('❌ Unexpected error in generateAnswer:', error.message);
+    const basicResponse = "I'm currently experiencing technical difficulties with the AI services. As a crop disease and pest management assistant, I'm designed to help farmers with agricultural questions. For immediate assistance, please contact your system administrator.";
+    return { answer: basicResponse, sources: [], raw: null };
   }
 }

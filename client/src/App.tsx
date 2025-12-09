@@ -10,7 +10,7 @@ import { Footer } from "@/components/Footer";
 import Home from "@/pages/Home";
 import Diagnose from "@/pages/Diagnose";
 import Library from "@/pages/Library";
-import CropLibrary from "@/pages/CropLibrary";
+
 import RagAssistant from "@/pages/RagAssistant";
 import Dashboard from "@/pages/Dashboard";
 import Experts from "@/pages/Experts";
@@ -22,7 +22,7 @@ import AdminDashboard from "@/pages/AdminDashboard";
 import ContentManager from "@/components/admin/ContentManager";
 import UserManagement from "@/components/admin/UserManagement";
 import DocumentManager from "@/components/admin/DocumentManager";
-import CropLibraryManager from "@/components/admin/CropLibraryManager";
+
 import AdminSidebar from "@/components/admin/AdminSidebar";
 
 function Router() {
@@ -31,7 +31,7 @@ function Router() {
       <Route path="/" component={Home} />
       <Route path="/diagnose" component={Diagnose} />
       <Route path="/library" component={Library} />
-      <Route path="/crop-library" component={CropLibrary} />
+      
       <Route path="/chat" component={RagAssistant} />
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/experts" component={Experts} />
@@ -48,11 +48,10 @@ function AdminRouter() {
     <Switch>
       <Route path="/admin/dashboard" component={AdminDashboard} />
       <Route path="/admin/content" component={ContentManager} />
-      <Route path="/admin/crop-library" component={CropLibraryManager} />
       <Route path="/admin/documents" component={DocumentManager} />
       <Route path="/admin/users" component={UserManagement} />
       <Route path="/admin">
-        <Redirect to="/admin/crop-library" />
+        <Redirect to="/admin/dashboard" />
       </Route>
     </Switch>
   );

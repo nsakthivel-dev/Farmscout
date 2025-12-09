@@ -177,8 +177,24 @@ export async function queryVectors(embedding: number[], topK: number = 5): Promi
     
     console.log(`Computing similarities against ${vectorStore.length} stored vectors`);
     
-    // Calculate similarity scores for all vectors
-    const similarities = vectorStore.map(item => ({
+    // Filter out vectors with different dimensions to avoid dimension mismatch issues
+    const compatibleVectors = vectorStore.filter(item => 
+      item.values && 
+      Array.isArray(item.values) && 
+      item.values.length === embedding.length
+    );
+    
+    if (compatibleVectors.length !== vectorStore.length) {
+      console.warn(`Filtered out ${vectorStore.length - compatibleVectors.length} vectors due to dimension mismatch`);
+    }
+    
+    if (compatibleVectors.length === 0) {
+      console.log('No compatible vectors found for similarity computation');
+      return [];
+    }
+    
+    // Calculate similarity scores for compatible vectors only
+    const similarities = compatibleVectors.map(item => ({
       item,
       score: cosineSimilarity(embedding, item.values)
     }));

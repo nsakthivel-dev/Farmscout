@@ -4,6 +4,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/co
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { MessageSquare, Trash2, Plus, Menu, Leaf } from "lucide-react";
+import { useRouteChange } from "@/hooks/useRouteChange"; // Import our custom hook
 
 interface ChatHistoryItem {
   id: string;
@@ -40,6 +41,19 @@ export default function RagAssistant() {
     }
   }, []);
 
+  // Check for saved session when component mounts
+  useEffect(() => {
+    const savedSession = localStorage.getItem('currentChatSession');
+    if (savedSession) {
+      try {
+        const parsed = JSON.parse(savedSession);
+        setCurrentConversation(parsed.messages);
+      } catch (e) {
+        console.error("Failed to parse saved session", e);
+      }
+    }
+  }, []);
+
   const addToHistory = (question: string, answer: string, messages: Array<{
     id: string | number;
     role: "user" | "assistant";
@@ -73,6 +87,97 @@ export default function RagAssistant() {
     // Store in localStorage so ChatWindow can access it
     localStorage.setItem('chatMessages', JSON.stringify(conversation.messages));
   };
+
+  // Handle route changes to save current conversation to history
+  useRouteChange((newPath) => {
+    // Only save to history if we're actually leaving the chat page
+    if (newPath !== '/chat' && currentConversation && currentConversation.length > 0) {
+      // Create a title from the first user message
+      const firstUserMessage = currentConversation.find(msg => msg.role === "user");
+      const title = firstUserMessage ? 
+        (firstUserMessage.text.length > 50 ? firstUserMessage.text.substring(0, 50) + "..." : firstUserMessage.text) :
+        "Untitled Conversation";
+      
+      // Create a preview from the last assistant message
+      const lastAssistantMessages = currentConversation.filter(msg => msg.role === "assistant");
+      const lastAssistantMessage = lastAssistantMessages[lastAssistantMessages.length - 1];
+      const preview = lastAssistantMessage ?
+        (lastAssistantMessage.text.length > 50 ? lastAssistantMessage.text.substring(0, 50) + "..." : lastAssistantMessage.text) :
+        "No response";
+      
+      const newEntry: ChatHistoryItem = {
+        id: Date.now().toString(),
+        timestamp: Date.now(),
+        title,
+        preview,
+        messages: currentConversation
+      };
+
+      // Get existing history
+      const chatHistoryStr = localStorage.getItem('chatHistory');
+      let chatHistory: ChatHistoryItem[] = chatHistoryStr ? JSON.parse(chatHistoryStr) : [];
+      
+      // Add current conversation to history (limit to 20 recent sessions)
+      chatHistory = [newEntry, ...chatHistory.slice(0, 19)];
+      
+      // Save updated history
+      localStorage.setItem('chatHistory', JSON.stringify(chatHistory));
+    }
+    
+    // Remove current session since it's now in history
+    localStorage.removeItem('currentChatSession');
+    
+    // Do NOT open a new tab - this was causing the bug
+    // window.open('/chat', '_blank');
+  });
+
+  // Handle page unload/close to save current conversation to history
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      // If there's a current conversation, add it to history
+      if (currentConversation && currentConversation.length > 0) {
+        // Create a title from the first user message
+        const firstUserMessage = currentConversation.find(msg => msg.role === "user");
+        const title = firstUserMessage ? 
+          (firstUserMessage.text.length > 50 ? firstUserMessage.text.substring(0, 50) + "..." : firstUserMessage.text) :
+          "Untitled Conversation";
+        
+        // Create a preview from the last assistant message
+        const lastAssistantMessages = currentConversation.filter(msg => msg.role === "assistant");
+        const lastAssistantMessage = lastAssistantMessages[lastAssistantMessages.length - 1];
+        const preview = lastAssistantMessage ?
+          (lastAssistantMessage.text.length > 50 ? lastAssistantMessage.text.substring(0, 50) + "..." : lastAssistantMessage.text) :
+          "No response";
+        
+        const newEntry: ChatHistoryItem = {
+          id: Date.now().toString(),
+          timestamp: Date.now(),
+          title,
+          preview,
+          messages: currentConversation
+        };
+
+        // Get existing history
+        const chatHistoryStr = localStorage.getItem('chatHistory');
+        let chatHistory: ChatHistoryItem[] = chatHistoryStr ? JSON.parse(chatHistoryStr) : [];
+        
+        // Add current conversation to history (limit to 20 recent sessions)
+        chatHistory = [newEntry, ...chatHistory.slice(0, 19)];
+        
+        // Save updated history
+        localStorage.setItem('chatHistory', JSON.stringify(chatHistory));
+      }
+      
+      // Remove current session since it's now in history
+      localStorage.removeItem('currentChatSession');
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [currentConversation]);
 
   const HistorySidebar = () => (
     <div className="flex flex-col h-full bg-gradient-to-b from-background via-background to-muted/10">

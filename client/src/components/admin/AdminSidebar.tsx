@@ -5,7 +5,7 @@ import { FileText, Users, LayoutDashboard, LogOut, Sprout, FileStack, Leaf } fro
 const adminNavItems = [
   { href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/content", label: "Content Manager", icon: FileText },
-  { href: "/admin/crop-library", label: "Crop Library", icon: Sprout },
+  
   { href: "/admin/documents", label: "Documents", icon: FileStack },
   { href: "/admin/users", label: "User Management", icon: Users },
 ];

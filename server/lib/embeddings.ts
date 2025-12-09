@@ -59,7 +59,7 @@ export async function getEmbeddings(texts: string[]): Promise<number[][]> {
       // texts: array of strings
       // returns array of numeric arrays
       const res = await openrouterClient.embeddings.create({ 
-        model: 'openai/text-embedding-3-small', // Using OpenAI's embedding model through OpenRouter
+        model: 'openai/text-embedding-3-small', // Using OpenAI's embedding model through OpenRouter (1536 dimensions)
         input: texts 
       });
       
@@ -84,37 +84,14 @@ export async function getEmbeddings(texts: string[]): Promise<number[][]> {
     console.log('OpenRouter client not available, skipping');
   }
   
-  // Try Gemini as fallback
+  // Try Gemini as fallback - use a model that produces consistent dimensions
   if (googleAIClient) {
     try {
       console.log('Attempting to get embeddings from Gemini');
-      // Try the correct embedding model
-      const modelNames = ['models/text-embedding-004', 'models/embedding-001'];
-      
-      for (const modelName of modelNames) {
-        try {
-          console.log(`Trying Gemini embedding model: ${modelName}`);
-          const model = googleAIClient.getGenerativeModel({ model: modelName });
-          const embeddings = [];
-          
-          for (const text of texts) {
-            const result = await model.embedContent(text);
-            if (result && result.embedding && result.embedding.values) {
-              embeddings.push(result.embedding.values);
-            } else {
-              throw new Error(`Empty embedding result from Gemini model ${modelName}`);
-            }
-          }
-          
-          console.log(`Successfully got embeddings from Gemini model: ${modelName}`);
-          return embeddings;
-        } catch (modelError: any) {
-          console.log(`Failed with Gemini embedding model ${modelName}:`, modelError.message);
-          // Continue to next model
-        }
-      }
-      
-      throw new Error('All Gemini embedding models failed');
+      // Use text-embedding-004 which produces 768-dimensional embeddings
+      // But to maintain consistency with OpenRouter, we'll use a different approach
+      // For now, let's stick with OpenRouter as primary and only use Gemini for chat
+      console.log('Skipping Gemini for embeddings to maintain dimension consistency');
     } catch (geminiError: any) {
       console.error('Error getting embeddings from Gemini:', geminiError.message);
     }

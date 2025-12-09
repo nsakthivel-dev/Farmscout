@@ -8,6 +8,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { apiRequest } from "@/lib/queryClient";
+import { useRouteChange } from "@/hooks/useRouteChange"; // Import our custom hook
 
 interface Message {
   id: string;
@@ -16,15 +17,38 @@ interface Message {
   timestamp: Date;
 }
 
+interface ChatSession {
+  id: string;
+  timestamp: Date;
+  messages: Message[];
+}
+
 export default function Chat() {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: "1",
-      role: "assistant",
-      content: "Hello! I'm your AI farming assistant. I can help you diagnose crop diseases, provide treatment advice, and answer questions about farming practices. How can I help you today?",
-      timestamp: new Date(),
-    },
-  ]);
+  const [messages, setMessages] = useState<Message[]>(() => {
+    // Load saved session if exists
+    const savedSession = localStorage.getItem('currentChatSession');
+    if (savedSession) {
+      try {
+        const parsed = JSON.parse(savedSession);
+        return parsed.messages.map((msg: any) => ({
+          ...msg,
+          timestamp: new Date(msg.timestamp)
+        }));
+      } catch (e) {
+        console.error("Failed to parse saved session", e);
+      }
+    }
+    
+    // Default welcome message
+    return [
+      {
+        id: "1",
+        role: "assistant",
+        content: "Hello! I'm your AI farming assistant. I can help you diagnose crop diseases, provide treatment advice, and answer questions about farming practices. How can I help you today?",
+        timestamp: new Date(),
+      },
+    ];
+  });
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -35,6 +59,73 @@ export default function Chat() {
 
   useEffect(() => {
     scrollToBottom();
+  }, [messages]);
+
+  // Save chat session to localStorage whenever messages change
+  useEffect(() => {
+    const session: ChatSession = {
+      id: "current-session",
+      timestamp: new Date(),
+      messages: messages
+    };
+    localStorage.setItem('currentChatSession', JSON.stringify(session));
+  }, [messages]);
+
+  // Handle route changes to save chat to history
+  useRouteChange(() => {
+    // Add current session to chat history
+    const session: ChatSession = {
+      id: Date.now().toString(),
+      timestamp: new Date(),
+      messages: messages
+    };
+    
+    // Get existing history or initialize empty array
+    const chatHistoryStr = localStorage.getItem('chatHistory');
+    let chatHistory: ChatSession[] = chatHistoryStr ? JSON.parse(chatHistoryStr) : [];
+    
+    // Add current session to history (limit to 20 recent sessions)
+    chatHistory = [session, ...chatHistory.slice(0, 19)];
+    
+    // Save updated history
+    localStorage.setItem('chatHistory', JSON.stringify(chatHistory));
+    
+    // Remove current session since it's now in history
+    localStorage.removeItem('currentChatSession');
+    
+    // Open new tab with the chat page
+    window.open('/chat', '_blank');
+  });
+
+  // Handle page unload/close to save chat to history
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      // Add current session to chat history
+      const session: ChatSession = {
+        id: Date.now().toString(),
+        timestamp: new Date(),
+        messages: messages
+      };
+      
+      // Get existing history or initialize empty array
+      const chatHistoryStr = localStorage.getItem('chatHistory');
+      let chatHistory: ChatSession[] = chatHistoryStr ? JSON.parse(chatHistoryStr) : [];
+      
+      // Add current session to history (limit to 20 recent sessions)
+      chatHistory = [session, ...chatHistory.slice(0, 19)];
+      
+      // Save updated history
+      localStorage.setItem('chatHistory', JSON.stringify(chatHistory));
+      
+      // Remove current session since it's now in history
+      localStorage.removeItem('currentChatSession');
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
   }, [messages]);
 
   const chatMutation = useMutation({

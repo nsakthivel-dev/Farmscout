@@ -40,8 +40,17 @@ export default function ChatWindow({ onAddToHistory, onOpenMenu, initialMessages
     }
   }, [initialMessages]);
 
+  // Save messages to localStorage whenever they change
   useEffect(() => {
     localStorage.setItem('chatMessages', JSON.stringify(messages));
+    
+    // Also save as current session for persistence
+    const session = {
+      id: "current-session",
+      timestamp: new Date(),
+      messages: messages
+    };
+    localStorage.setItem('currentChatSession', JSON.stringify(session));
   }, [messages]);
 
   // Check if user is at the bottom of the chat

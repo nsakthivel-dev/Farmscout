@@ -9,7 +9,6 @@ export default function AdminHeader() {
   const getPageTitle = () => {
     switch (location) {
       case "/admin":
-      case "/admin/crop-library":
         return "Crop Library Manager";
       case "/admin/dashboard":
         return "Admin Dashboard";
@@ -27,7 +26,6 @@ export default function AdminHeader() {
   const getPageDescription = () => {
     switch (location) {
       case "/admin":
-      case "/admin/crop-library":
         return "Manage crop library content that will be displayed on the public crop library page";
       case "/admin/dashboard":
         return "Overview of your application statistics and recent activity";
