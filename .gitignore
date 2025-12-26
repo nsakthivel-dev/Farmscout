@@ -6,9 +6,6 @@ vite.config.ts.*
 *.tar.gz
 
 # Environment variables
-.env
-.env.local
-.env.*.local
 
 # Firebase config
 client/src/lib/firebase.ts
@@ -51,7 +48,7 @@ typings/
 .eslintcache
 
 # dotenv environment variables file
-.env*
+// .env*
 !*.example
 
 # VS Code
